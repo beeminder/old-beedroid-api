@@ -1,0 +1,19 @@
+This document details the API presented to Android apps by the Beeminder app.
+
+I think the operational behavior will be as follows:
+
+- The API user will request access to the Beeminder app through a startActivity(), 
+intended for an authorization activity. This will result in an activity to be shown,
+inquiring the user whether the app that issued the request should be given permission
+or not. I guess the only permission that makes sense is datapoint submission. I don't
+see any reason to expose any data to other apps, they can use the API if they want.
+
+- The response to the activity start request will include some kind of access token, which
+will be associated with the requesting app.
+
+- After that, an intent can be sent to the Beeminder app for letting the user select a username
+and a goal from a list. No reason to yield the wholelist to the outside. Let the user pick. This
+will once again be through a startActivity() call. PICK action?
+ 
+- From then on, datapoint submissions can be through broadcast intents targeted to the Beeminder
+app, including the token
