@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.util.Log;
 import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -25,6 +26,7 @@ public class BeeminderForm extends Activity {
 	TextView mGoalView;
 	TextView mTokenView;
 	EditText mValueView;
+	Button mSubmitButton;
 
 	String mUsername;
 	String mGoalSlug;
@@ -95,6 +97,15 @@ public class BeeminderForm extends Activity {
 		public void call(Session session, int id, String error) {
 			Log.v(TAG, "Point submission completed, id=" + id + ", error="
 					+ error);
+			if (error == null) {
+				Toast.makeText(getBaseContext(), "Datapoint submission complete.", Toast.LENGTH_SHORT)
+				.show();				
+			} else {
+				Toast.makeText(getBaseContext(), "Error submitting datapoint: "+error, Toast.LENGTH_SHORT)
+				.show();
+			}
+			mSubmitButton.setEnabled(true);
+			mSubmitButton.setText("Submit Point");
 		}
 	}
 
@@ -106,6 +117,7 @@ public class BeeminderForm extends Activity {
 		mGoalView = (TextView) findViewById(R.id.token);
 		mTokenView = (TextView) findViewById(R.id.goaluri);
 		mValueView = (EditText) findViewById(R.id.value);
+		mSubmitButton = (Button) findViewById(R.id.submit);
 
 		resetFields();
 
@@ -164,6 +176,9 @@ public class BeeminderForm extends Activity {
 		try {
 			value = Float.parseFloat(mValueView.getText().toString());
 			mSession.submitPoint(value, 0, null);
+			mSubmitButton.setEnabled(false);
+			mSubmitButton.setText("Submitting...");
+			
 		} catch (NumberFormatException e) {
 			Toast.makeText(getApplicationContext(), "Invalid value!",
 					Toast.LENGTH_SHORT).show();
