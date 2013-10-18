@@ -12,15 +12,13 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.beeminder.beedroid.api.Session;
+import com.beeminder.beedroid.api.Session.SessionError;
 import com.beeminder.beedroid.api.Session.SessionException;
 import com.beeminder.beedroid.api.Session.SessionState;
 
 public class BeeminderForm extends Activity {
 
 	private static final String TAG = "BeeminderForm";
-
-	public static final String ACTION_API_SUBMITPOINT = "com.beeminder.beeminder.SUBMITPOINT";
-	public static final String BEEMINDER_PACKAGE = "com.beeminder.beeminder";
 
 	public static final int ACTIVITY_BEEMINDER_AUTH = 1;
 
@@ -47,6 +45,20 @@ public class BeeminderForm extends Activity {
 		mValueView.setText("0");
 	}
 
+	private void recordCurGoal() {
+		SharedPreferences.Editor edit = mSP.edit();
+		edit.putString(KEY_USERNAME, mUsername);
+		edit.putString(KEY_GOALSLUG, mGoalSlug);
+		edit.commit();
+	}
+
+	private void clearCurGoal() {
+		SharedPreferences.Editor edit = mSP.edit();
+		edit.remove(KEY_USERNAME);
+		edit.remove(KEY_GOALSLUG);
+		edit.commit();
+	}
+
 	private class SessionStatusCallback implements Session.StatusCallback {
 		@Override
 		public void call(Session session, SessionState state) {
@@ -62,18 +74,27 @@ public class BeeminderForm extends Activity {
 				mGoalView.setText("Goal URI: " + mUsername + "/" + mGoalSlug);
 				mTokenView.setText("Token: " + mToken);
 
-				SharedPreferences.Editor edit = mSP.edit();
-				edit.putString(KEY_USERNAME, mUsername);
-				edit.putString(KEY_GOALSLUG, mGoalSlug);
-				edit.commit();
+				recordCurGoal();
 
 			} else if (state == SessionState.CLOSED_ON_ERROR) {
+				SessionError error = mSession.getError();
+				if (error.type == Session.ErrorType.ERROR_UNAUTHORIZED)
+					clearCurGoal();
+				resetFields();
 				Toast.makeText(getBaseContext(),
-						"Session closed with error: " + mSession.getError(),
+						"Session closed with error: " + mSession.getError().message,
 						Toast.LENGTH_SHORT).show();
 			} else if (state == SessionState.CLOSED) {
 				resetFields();
 			}
+		}
+	}
+
+	private class PointSubmissionCallback implements Session.SubmissionCallback {
+		@Override
+		public void call(Session session, int id, String error) {
+			Log.v(TAG, "Point submission completed, id=" + id + ", error="
+					+ error);
 		}
 	}
 
@@ -95,18 +116,20 @@ public class BeeminderForm extends Activity {
 
 		try {
 			mSession = new Session(this);
-			mSession.setCallback(new SessionStatusCallback());
+			mSession.setStatusCallback(new SessionStatusCallback());
+			mSession.setSubmissionCallback(new PointSubmissionCallback());
 
 			if (mUsername != null && mGoalSlug != null)
 				mSession.openForGoal(mUsername, mGoalSlug);
-			else resetFields();
+			else
+				resetFields();
 
 		} catch (SessionException e) {
 			resetFields();
 			Toast.makeText(getBaseContext(), e.getMessage(), Toast.LENGTH_SHORT)
 					.show();
+			clearCurGoal();
 		}
-
 	}
 
 	@Override
@@ -129,12 +152,7 @@ public class BeeminderForm extends Activity {
 	}
 
 	public void closeSession(View v) {
-
-		SharedPreferences.Editor edit = mSP.edit();
-		edit.remove(KEY_USERNAME);
-		edit.remove(KEY_GOALSLUG);
-		edit.commit();
-
+		clearCurGoal();
 		resetFields();
 		mSession.close();
 	}
