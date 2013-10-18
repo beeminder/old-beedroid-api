@@ -38,6 +38,17 @@ public class BeeminderForm extends Activity {
 	SharedPreferences mSP;
 	Session mSession;
 
+	private Toast mInfoToast = null;
+
+	private void showToast(String msg) {
+		if (mInfoToast == null)
+			mInfoToast = Toast.makeText(getBaseContext(), msg,
+					Toast.LENGTH_SHORT);
+		else
+			mInfoToast.setText(msg);
+		mInfoToast.show();
+	}
+
 	private void resetFields() {
 		mToken = null;
 		mUsername = null;
@@ -83,9 +94,8 @@ public class BeeminderForm extends Activity {
 				if (error.type == Session.ErrorType.ERROR_UNAUTHORIZED)
 					clearCurGoal();
 				resetFields();
-				Toast.makeText(getBaseContext(),
-						"Session closed with error: " + mSession.getError().message,
-						Toast.LENGTH_SHORT).show();
+				showToast("Session closed with error: "
+						+ mSession.getError().message);
 			} else if (state == SessionState.CLOSED) {
 				resetFields();
 			}
@@ -98,11 +108,9 @@ public class BeeminderForm extends Activity {
 			Log.v(TAG, "Point submission completed, id=" + id + ", error="
 					+ error);
 			if (error == null) {
-				Toast.makeText(getBaseContext(), "Datapoint submission complete.", Toast.LENGTH_SHORT)
-				.show();				
+				showToast("Datapoint submission complete.");
 			} else {
-				Toast.makeText(getBaseContext(), "Error submitting datapoint: "+error, Toast.LENGTH_SHORT)
-				.show();
+				showToast("Error submitting datapoint: ");
 			}
 			mSubmitButton.setEnabled(true);
 			mSubmitButton.setText("Submit Point");
@@ -138,8 +146,7 @@ public class BeeminderForm extends Activity {
 
 		} catch (SessionException e) {
 			resetFields();
-			Toast.makeText(getBaseContext(), e.getMessage(), Toast.LENGTH_SHORT)
-					.show();
+			showToast(e.getMessage());
 			clearCurGoal();
 		}
 	}
@@ -158,8 +165,7 @@ public class BeeminderForm extends Activity {
 			mSession.close();
 			mSession.openForNewGoal();
 		} catch (SessionException e) {
-			Toast.makeText(getBaseContext(), e.getMessage(), Toast.LENGTH_SHORT)
-					.show();
+			showToast(e.getMessage());
 		}
 	}
 
@@ -178,15 +184,19 @@ public class BeeminderForm extends Activity {
 			mSession.submitPoint(value, 0, null);
 			mSubmitButton.setEnabled(false);
 			mSubmitButton.setText("Submitting...");
-			
+
 		} catch (NumberFormatException e) {
-			Toast.makeText(getApplicationContext(), "Invalid value!",
-					Toast.LENGTH_SHORT).show();
+			showToast("Invalid value!");
 		} catch (SessionException e) {
-			Toast.makeText(getApplicationContext(),
-					"Session error:" + e.getMessage(), Toast.LENGTH_SHORT)
-					.show();
+			showToast("Session error:" + e.getMessage());
 		}
+	}
+
+	@Override
+	protected void onPause() {
+		super.onPause();
+		if (mInfoToast != null) mInfoToast.cancel();
+		mInfoToast = null;
 	}
 
 	@Override
