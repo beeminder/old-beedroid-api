@@ -104,7 +104,7 @@ public class BeeminderForm extends Activity {
 
 	private class PointSubmissionCallback implements Session.SubmissionCallback {
 		@Override
-		public void call(Session session, int id, String error) {
+		public void call(Session session, int id, String request_id, String error) {
 			Log.v(TAG, "Point submission completed, id=" + id + ", error="
 					+ error);
 			if (error == null) {

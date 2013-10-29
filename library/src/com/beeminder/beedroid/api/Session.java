@@ -49,7 +49,7 @@ import android.util.Log;
 public class Session {
 	private final static String TAG = "Session";
 	private final static boolean LOCAL_LOGV = true;
-	
+
 	/** Preference database name for storing session information */
 	private static final String BEEDROID_SESSION_PREFS = "com.beeminder.beedroid.api.sessions";
 
@@ -62,7 +62,7 @@ public class Session {
 	/** Intent action to remove an authorization using the Beeminder API. */
 	private static final String ACTION_API_UNAUTHORIZE = "com.beeminder.beeminder.UNAUTHORIZE";
 	/** Intent action to initiate datapoint submission. */
-	private static final String ACTION_API_SUBMITPOINT = "com.beeminder.beeminder.SUBMITPOINT";
+	private static final String ACTION_API_EDITPOINT = "com.beeminder.beeminder.EDITPOINT";
 
 	/*
 	 * Keys used for communicating with the Beeminder authorization activity and
@@ -75,6 +75,7 @@ public class Session {
 	private static final String KEY_API_GOALSLUG = "slug";
 	private static final String KEY_API_TOKEN = "token";
 
+	private static final String KEY_API_REQUESTID = "req_id";
 	private static final String KEY_API_POINTID = "ptid";
 	private static final String KEY_API_VALUE = "value";
 	private static final String KEY_API_TIMESTAMP = "timestamp";
@@ -87,7 +88,9 @@ public class Session {
 	 * activities and services
 	 */
 	/** Identifies a message to initiate datapoint submission */
-	private static final int MSG_API_SUBMITPOINT = 1;
+	private static final int MSG_API_CREATEPOINT = 1;
+	private static final int MSG_API_DELETEPOINT = 2;
+	private static final int MSG_API_UPDATEPOINT = 3;
 	/** Identifies a message indicating a successful datapoint submission */
 	private static final int MSG_API_RESPONSE_OK = 100;
 	/**
@@ -162,7 +165,7 @@ public class Session {
 	 * request has been received.
 	 */
 	public interface SubmissionCallback {
-		public void call(Session session, int id, String error);
+		public void call(Session session, int submission_id, String request_id, String error);
 	}
 
 	// Shared preferences to associate tokens with username/goal slug pairs
@@ -387,7 +390,7 @@ public class Session {
 	private void finishOpen() {
 		if (LOCAL_LOGV) Log.v(TAG, "finishOpen()");
 		if (mState == SessionState.OPENING) {
-			Intent intent = new Intent().setAction(ACTION_API_SUBMITPOINT).setPackage(BEEDROID_PACKAGE);
+			Intent intent = new Intent().setAction(ACTION_API_EDITPOINT).setPackage(BEEDROID_PACKAGE);
 			mContext.bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
 		}
 	}
@@ -437,7 +440,7 @@ public class Session {
 	 * app. Once the request is completed and a response is received, the
 	 * submission callback will be called if it was previously registered.
 	 */
-	public final int submitPoint(double value, long timestamp, String comment) throws SessionException {
+	public final int createPoint(double value, long timestamp, String comment) throws SessionException {
 		if (!mBound) {
 			throw new SessionException("Beeminder service not bound");
 		}
@@ -446,8 +449,8 @@ public class Session {
 			throw new SessionException("Attempt to submit on closed session");
 		}
 
-		int pointId = newPointId();
-		Message msg = Message.obtain(null, MSG_API_SUBMITPOINT, 0, 0);
+		int submitId = newSubmissionId();
+		Message msg = Message.obtain(null, MSG_API_CREATEPOINT, 0, 0);
 		Bundle extras = new Bundle();
 		extras.putString(KEY_API_PACKAGENAME, mPackageName);
 		extras.putString(KEY_API_PROTOCOLVERSION, Session.BEEDROID_PROTOCOL_VERSION);
@@ -455,10 +458,10 @@ public class Session {
 		extras.putString(KEY_API_USERNAME, mUsername);
 		extras.putString(KEY_API_GOALSLUG, mGoalSlug);
 
+		extras.putInt(KEY_API_POINTID, submitId);
 		extras.putDouble(KEY_API_VALUE, value);
 		if (timestamp != 0) extras.putLong(KEY_API_TIMESTAMP, timestamp);
 		if (comment != null) extras.putString(KEY_API_COMMENT, comment);
-		extras.putInt(KEY_API_POINTID, pointId);
 
 		msg.setData(extras);
 		msg.replyTo = mReplyTo;
@@ -469,7 +472,43 @@ public class Session {
 			e.printStackTrace();
 			throw new SessionException("Could not send message to Beeminder service");
 		}
-		return pointId;
+		return submitId;
+	}
+
+	/**
+	 * This method can be called by the activity that created the session to
+	 * delete a datapoint with the supplied request_id. It forwards the request
+	 * to the Beeminder app. Once the request is completed and a response is
+	 * received, the submission callback will be called if it was previously
+	 * registered.
+	 */
+	public final int deletePoint(String requestId) throws SessionException {
+
+		if (!mBound) throw new SessionException("Beeminder service not bound");
+		if (mState != SessionState.OPENED) throw new SessionException("Attempt to submit on closed session");
+
+		int submitId = newSubmissionId();
+		Message msg = Message.obtain(null, MSG_API_DELETEPOINT, 0, 0);
+		Bundle extras = new Bundle();
+		extras.putString(KEY_API_PACKAGENAME, mPackageName);
+		extras.putString(KEY_API_PROTOCOLVERSION, Session.BEEDROID_PROTOCOL_VERSION);
+		extras.putString(KEY_API_TOKEN, mToken);
+		extras.putString(KEY_API_USERNAME, mUsername);
+		extras.putString(KEY_API_GOALSLUG, mGoalSlug);
+
+		extras.putInt(KEY_API_POINTID, submitId);
+		extras.putString(KEY_API_REQUESTID, requestId);
+
+		msg.setData(extras);
+		msg.replyTo = mReplyTo;
+
+		try {
+			mService.send(msg);
+		} catch (RemoteException e) {
+			e.printStackTrace();
+			throw new SessionException("Could not send message to Beeminder service");
+		}
+		return submitId;
 	}
 
 	// Class for interacting with the main interface of the service.
@@ -497,7 +536,7 @@ public class Session {
 			Log.v(TAG, "handleMessage: Response received with " + msg.what);
 
 			Bundle extras = msg.getData();
-			String error = null, username = null, slug = null;
+			String error = null, username = null, slug = null, request_id = null;
 			int pointId = -1;
 
 			if (extras != null) {
@@ -505,6 +544,7 @@ public class Session {
 				pointId = extras.getInt(Session.KEY_API_POINTID);
 				username = extras.getString(Session.KEY_API_USERNAME);
 				slug = extras.getString(Session.KEY_API_GOALSLUG);
+				request_id = extras.getString(Session.KEY_API_REQUESTID);
 			}
 			int what = msg.what;
 
@@ -523,10 +563,10 @@ public class Session {
 
 			if (mSubmissionCallback != null) {
 				final int pointId_final = pointId;
-				final String error_final = error;
+				final String error_final = error, requestId_final = request_id;
 				Runnable runCallback = new Runnable() {
 					public void run() {
-						mSubmissionCallback.call(Session.this, pointId_final, error_final);
+						mSubmissionCallback.call(Session.this, pointId_final, requestId_final, error_final);
 					}
 				};
 				mMainHandler.post(runCallback);
@@ -538,7 +578,7 @@ public class Session {
 
 	// Facility to generate random integer point identifiers. No need to be
 	// secure here.
-	private static int newPointId() {
+	private static int newSubmissionId() {
 		if (random == null) random = new Random();
 		return random.nextInt(Integer.MAX_VALUE);
 	}
