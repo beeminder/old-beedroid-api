@@ -103,6 +103,8 @@ public class Session {
 	private static final int MSG_API_RESPONSE_ERROR = 102;
 	/** Identifies a message indicating a version mismatch */
 	private static final int MSG_API_RESPONSE_BADVERSION = 103;
+	/** Identifies a message indicating that a data point was not found*/
+	private static final int MSG_API_RESPONSE_NOTFOUND= 104;
 
 	/** Unique identifier integer for the Beeminder authorization activity */
 	private static final int ACTIVITY_BEEMINDER_AUTH = 105674;
@@ -112,7 +114,7 @@ public class Session {
 	 * during Session usage
 	 */
 	public enum ErrorType {
-		ERROR_UNAUTHORIZED, ERROR_BADVERSION, ERROR_OPEN, ERROR_OTHER
+		ERROR_UNAUTHORIZED, ERROR_BADVERSION, ERROR_NOTFOUND, ERROR_OPEN, ERROR_OTHER
 	}
 
 	/**
@@ -582,6 +584,8 @@ public class Session {
 				mError = new SessionError(ErrorType.ERROR_OTHER, errormsg);
 			} else if (what == Session.MSG_API_RESPONSE_BADVERSION) {
 				mError = new SessionError(ErrorType.ERROR_BADVERSION, errormsg);
+			} else if (what == Session.MSG_API_RESPONSE_NOTFOUND) {
+				mError = new SessionError(ErrorType.ERROR_NOTFOUND, errormsg);
 			}
 
 			if (mSubmissionCallback != null) {
