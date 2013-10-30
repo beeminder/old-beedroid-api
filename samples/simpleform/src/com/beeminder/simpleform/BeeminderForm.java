@@ -181,7 +181,7 @@ public class BeeminderForm extends Activity {
 
 		try {
 			value = Float.parseFloat(mValueView.getText().toString());
-			mSession.submitPoint(value, 0, null);
+			mSession.createPoint(value, 0, null);
 			mSubmitButton.setEnabled(false);
 			mSubmitButton.setText("Submitting...");
 
