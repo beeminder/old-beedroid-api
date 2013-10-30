@@ -55,7 +55,7 @@ public class Session {
 
 	/** Beeminder app's package name and API protovol version */
 	private static final String BEEDROID_PACKAGE = "com.beeminder.beeminder";
-	private static final String BEEDROID_PROTOCOL_VERSION = "20131017";
+	private static final String BEEDROID_PROTOCOL_VERSION = "20131030";
 
 	/** Intent action to initiate the Beeminder API authorization activity. */
 	private static final String ACTION_API_AUTHORIZE = "com.beeminder.beeminder.AUTHORIZE";
@@ -81,7 +81,8 @@ public class Session {
 	private static final String KEY_API_TIMESTAMP = "timestamp";
 	private static final String KEY_API_COMMENT = "comment";
 
-	private static final String KEY_API_ERROR = "error";
+	private static final String KEY_API_ERRORMSG = "error";
+	private static final String KEY_API_ERRORCODE = "errorcode";
 
 	/*
 	 * Definitions for message types used for communicating with Beeminder
@@ -100,6 +101,8 @@ public class Session {
 	private static final int MSG_API_RESPONSE_UNAUTHORIZED = 101;
 	/** Identifies a message indicating a failed datapoint submission */
 	private static final int MSG_API_RESPONSE_ERROR = 102;
+	/** Identifies a message indicating a version mismatch */
+	private static final int MSG_API_RESPONSE_BADVERSION = 103;
 
 	/** Unique identifier integer for the Beeminder authorization activity */
 	private static final int ACTIVITY_BEEMINDER_AUTH = 105674;
@@ -109,7 +112,7 @@ public class Session {
 	 * during Session usage
 	 */
 	public enum ErrorType {
-		ERROR_UNAUTHORIZED, ERROR_OPEN, ERROR_OTHER
+		ERROR_UNAUTHORIZED, ERROR_BADVERSION, ERROR_OPEN, ERROR_OTHER
 	}
 
 	/**
@@ -402,7 +405,7 @@ public class Session {
 	 * information as well as the authorization status.
 	 */
 	public void onActivityResult(int requestCode, int resultCode, Intent intent) {
-
+		if (LOCAL_LOGV) Log.v(TAG, "onActivityResult("+resultCode+")");
 		switch (requestCode) {
 		case ACTIVITY_BEEMINDER_AUTH:
 			if (resultCode == Activity.RESULT_OK && intent != null) {
@@ -420,10 +423,28 @@ public class Session {
 				mState = SessionState.OPENING;
 				postStateChange(oldstate, mState);
 			} else {
+				int errorcode = MSG_API_RESPONSE_ERROR;
+				String errormsg = "unknown";
+				if (intent != null) {
+					Bundle extras = intent.getExtras();
+					errorcode = extras.getInt(KEY_API_ERRORCODE, MSG_API_RESPONSE_ERROR);
+					errormsg = extras.getString(KEY_API_ERRORMSG);
+				}
+				
 				SessionError error;
-				if (intent != null) error = new SessionError(ErrorType.ERROR_OPEN, intent.getExtras().getString(
-						KEY_API_ERROR));
-				else error = new SessionError(ErrorType.ERROR_OPEN, "unknown");
+				switch (errorcode) {
+				case MSG_API_RESPONSE_BADVERSION:
+					error = new SessionError(ErrorType.ERROR_BADVERSION, errormsg);
+					break;
+				case MSG_API_RESPONSE_UNAUTHORIZED:
+					error = new SessionError(ErrorType.ERROR_UNAUTHORIZED, errormsg);
+					break;
+				case MSG_API_RESPONSE_ERROR:
+				default:	
+					error = new SessionError(ErrorType.ERROR_OPEN, errormsg);
+					break;	
+				}
+
 				closeWithError(error);
 			}
 			finishOpen();
@@ -435,8 +456,8 @@ public class Session {
 
 	/**
 	 * This method can be called by the activity that created the session to
-	 * submit a new datapoint with the supplied content. It generates a random
-	 * integer ID for the datapoint, then forwardsthe request to the Beeminder
+	 * submit a new data point with the supplied content. It generates a random
+	 * integer ID for the data point, then forwards the request to the Beeminder
 	 * app. Once the request is completed and a response is received, the
 	 * submission callback will be called if it was previously registered.
 	 */
@@ -536,11 +557,11 @@ public class Session {
 			Log.v(TAG, "handleMessage: Response received with " + msg.what);
 
 			Bundle extras = msg.getData();
-			String error = null, username = null, slug = null, request_id = null;
+			String errormsg = null, username = null, slug = null, request_id = null;
 			int pointId = -1;
 
 			if (extras != null) {
-				error = extras.getString(Session.KEY_API_ERROR);
+				errormsg = extras.getString(Session.KEY_API_ERRORMSG);
 				pointId = extras.getInt(Session.KEY_API_POINTID);
 				username = extras.getString(Session.KEY_API_USERNAME);
 				slug = extras.getString(Session.KEY_API_GOALSLUG);
@@ -555,15 +576,17 @@ public class Session {
 					SharedPreferences.Editor edit = mSP.edit();
 					edit.remove(mUsername + "/" + mGoalSlug + "_token");
 					edit.commit();
-					closeWithError(new SessionError(ErrorType.ERROR_UNAUTHORIZED, error));
+					closeWithError(new SessionError(ErrorType.ERROR_UNAUTHORIZED, errormsg));
 				}
 			} else if (what == Session.MSG_API_RESPONSE_ERROR) {
-				mError = new SessionError(ErrorType.ERROR_OTHER, error);
+				mError = new SessionError(ErrorType.ERROR_OTHER, errormsg);
+			} else if (what == Session.MSG_API_RESPONSE_BADVERSION) {
+				mError = new SessionError(ErrorType.ERROR_BADVERSION, errormsg);
 			}
 
 			if (mSubmissionCallback != null) {
 				final int pointId_final = pointId;
-				final String error_final = error, requestId_final = request_id;
+				final String error_final = errormsg, requestId_final = request_id;
 				Runnable runCallback = new Runnable() {
 					public void run() {
 						mSubmissionCallback.call(Session.this, pointId_final, requestId_final, error_final);
