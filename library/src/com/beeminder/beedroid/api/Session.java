@@ -48,7 +48,7 @@ import android.util.Log;
  */
 public class Session {
 	private final static String TAG = "Session";
-	private final static boolean LOCAL_LOGV = true;
+	private final static boolean LOCAL_LOGV = false;
 
 	/** Preference database name for storing session information */
 	private static final String BEEDROID_SESSION_PREFS = "com.beeminder.beedroid.api.sessions";
@@ -556,7 +556,7 @@ public class Session {
 	private class IncomingHandler extends Handler {
 		@Override
 		public void handleMessage(Message msg) {
-			Log.v(TAG, "handleMessage: Response received with " + msg.what);
+			if (LOCAL_LOGV) Log.v(TAG, "handleMessage: Response received with " + msg.what);
 
 			Bundle extras = msg.getData();
 			String errormsg = null, username = null, slug = null, request_id = null;
