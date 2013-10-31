@@ -322,9 +322,9 @@ public class Session {
 	}
 
 	// This utility method performs tasks common to all open actions
-	private void openCommon() throws SessionException {
+	private void openCommon( boolean reopen ) throws SessionException {
 
-		if (mState == SessionState.OPENED) {
+		if (!reopen && mState == SessionState.OPENED) {
 			throw new SessionException("Attempt to reopen an already open session");
 		} else if (mState == SessionState.OPENING) {
 			throw new SessionException("Attempt to reopen an opening session");
@@ -341,7 +341,7 @@ public class Session {
 	 */
 	public final void openForNewGoal() throws SessionException {
 
-		openCommon();
+		openCommon(false);
 
 		Intent intent = new Intent().setAction(ACTION_API_AUTHORIZE).setPackage(BEEDROID_PACKAGE)
 				.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP).addCategory(Intent.CATEGORY_DEFAULT)
@@ -361,6 +361,33 @@ public class Session {
 		postStateChange(oldstate, mState);
 	}
 
+	public final void reopenForGoal(String username, String slug) throws SessionException {
+		openCommon(true);
+
+		String key = username + "/" + slug + "_token";
+		String token = mSP.getString(key, null);
+		if (token == null) {
+			throw new SessionException("Could not find existing session token");
+		}
+
+		mUsername = username;
+		mGoalSlug = slug;
+		mToken = token;
+
+		if (mState == SessionState.OPENED) {
+			mState = SessionState.OPENED;
+			// Forces callback to be issued again
+			postStateChange(SessionState.OPENING, mState);
+		} else {
+			SessionState oldstate = mState;
+			mState = SessionState.OPENING;
+			postStateChange(oldstate, mState);			
+		}
+
+		finishOpen();
+	}
+
+	
 	/**
 	 * This method attempts to open a session associated with a particular user
 	 * and goal slug pair. This requires a previous openForNewGoal() to have
@@ -371,7 +398,7 @@ public class Session {
 	 * internal cache.
 	 */
 	public final void openForGoal(String username, String slug) throws SessionException {
-		openCommon();
+		openCommon(false);
 
 		String key = username + "/" + slug + "_token";
 		String token = mSP.getString(key, null);
