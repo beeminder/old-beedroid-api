@@ -367,7 +367,9 @@ public class Session {
 		String key = username + "/" + slug + "_token";
 		String token = mSP.getString(key, null);
 		if (token == null) {
-			throw new SessionException("Could not find existing session token");
+			String errmsg = "Could not find existing session token";
+			mError = new SessionError(ErrorType.ERROR_UNAUTHORIZED, errmsg);
+			throw new SessionException(errmsg);
 		}
 
 		mUsername = username;
@@ -403,7 +405,9 @@ public class Session {
 		String key = username + "/" + slug + "_token";
 		String token = mSP.getString(key, null);
 		if (token == null) {
-			throw new SessionException("Could not find existing session token");
+			String errmsg = "Could not find existing session token";
+			mError = new SessionError(ErrorType.ERROR_UNAUTHORIZED, errmsg);
+			throw new SessionException(errmsg);
 		}
 
 		mUsername = username;
