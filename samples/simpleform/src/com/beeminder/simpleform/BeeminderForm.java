@@ -74,7 +74,7 @@ public class BeeminderForm extends Activity {
 
 	private class SessionStatusCallback implements Session.StatusCallback {
 		@Override
-		public void call(Session session, SessionState state) {
+		public void call(Session session, SessionState state, SessionError error) {
 			Log.v(TAG, "Beeminder status changed:" + state);
 
 			if (state == SessionState.OPENED) {
@@ -90,12 +90,11 @@ public class BeeminderForm extends Activity {
 				recordCurGoal();
 
 			} else if (state == SessionState.CLOSED_ON_ERROR) {
-				SessionError error = mSession.getError();
 				if (error.type == Session.ErrorType.ERROR_UNAUTHORIZED)
 					clearCurGoal();
 				resetFields();
 				showToast("Session closed with error: "
-						+ mSession.getError().message);
+						+ error.message);
 			} else if (state == SessionState.CLOSED) {
 				resetFields();
 			}

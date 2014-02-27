@@ -114,7 +114,7 @@ public class Session {
 	 * during Session usage
 	 */
 	public enum ErrorType {
-		ERROR_UNAUTHORIZED, ERROR_BADVERSION, ERROR_NOTFOUND, ERROR_OPEN, ERROR_OTHER
+		ERROR_NONE, ERROR_UNAUTHORIZED, ERROR_BADVERSION, ERROR_NOTFOUND, ERROR_OPEN, ERROR_OTHER
 	}
 
 	/**
@@ -161,7 +161,7 @@ public class Session {
 	 * callback function to be invoked on session states changes
 	 */
 	public interface StatusCallback {
-		public void call(Session session, SessionState state);
+		public void call(Session session, SessionState state, SessionError error);
 	}
 
 	/**
@@ -201,7 +201,9 @@ public class Session {
 	private String mUsername;
 	private String mGoalSlug;
 	private String mToken;
-	private SessionError mError;
+	// Initialize a value for the error object in case Service is killed and
+	// restarted by the system
+	private SessionError mError = new SessionError(ErrorType.ERROR_NONE, "");
 
 	/**
 	 * This method returns the access token associated with the current session.
@@ -222,6 +224,7 @@ public class Session {
 
 	/** This method returns the latest error generated during Session operation. */
 	public final SessionError getError() {
+		// TODO: Google play indicates mError ends up null here somehow. Solve.
 		return mError;
 	}
 
@@ -287,7 +290,7 @@ public class Session {
 
 		Runnable runCallback = new Runnable() {
 			public void run() {
-				mStatusCallback.call(Session.this, newState);
+				mStatusCallback.call(Session.this, newState, mError);
 			}
 		};
 		mMainHandler.post(runCallback);
