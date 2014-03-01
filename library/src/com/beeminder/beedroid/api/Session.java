@@ -57,6 +57,8 @@ public class Session {
 	private static final String BEEDROID_PACKAGE = "com.beeminder.beeminder";
 	private static final String BEEDROID_PROTOCOL_VERSION = "20131030";
 
+	/** Intent action to visit a Beeminder goal. */
+	private static final String ACTION_VISITGOAL = "com.beeminder.beeminder.VISITGOAL";
 	/** Intent action to initiate the Beeminder API authorization activity. */
 	private static final String ACTION_API_AUTHORIZE = "com.beeminder.beeminder.AUTHORIZE";
 	/** Intent action to remove an authorization using the Beeminder API. */
@@ -84,6 +86,8 @@ public class Session {
 	private static final String KEY_API_ERRORMSG = "error";
 	private static final String KEY_API_ERRORCODE = "errorcode";
 
+	private static final String KEY_VISITGOAL_USERNAME = "user";
+	private static final String KEY_VISITGOAL_GOALSLUG = "goal";
 	/*
 	 * Definitions for message types used for communicating with Beeminder
 	 * activities and services
@@ -103,8 +107,8 @@ public class Session {
 	private static final int MSG_API_RESPONSE_ERROR = 102;
 	/** Identifies a message indicating a version mismatch */
 	private static final int MSG_API_RESPONSE_BADVERSION = 103;
-	/** Identifies a message indicating that a data point was not found*/
-	private static final int MSG_API_RESPONSE_NOTFOUND= 104;
+	/** Identifies a message indicating that a data point was not found */
+	private static final int MSG_API_RESPONSE_NOTFOUND = 104;
 
 	/** Unique identifier integer for the Beeminder authorization activity */
 	private static final int ACTIVITY_BEEMINDER_AUTH = 105674;
@@ -325,7 +329,7 @@ public class Session {
 	}
 
 	// This utility method performs tasks common to all open actions
-	private void openCommon( boolean reopen ) throws SessionException {
+	private void openCommon(boolean reopen) throws SessionException {
 
 		if (!reopen && mState == SessionState.OPENED) {
 			throw new SessionException("Attempt to reopen an already open session");
@@ -386,13 +390,12 @@ public class Session {
 		} else {
 			SessionState oldstate = mState;
 			mState = SessionState.OPENING;
-			postStateChange(oldstate, mState);			
+			postStateChange(oldstate, mState);
 		}
 
 		finishOpen();
 	}
 
-	
 	/**
 	 * This method attempts to open a session associated with a particular user
 	 * and goal slug pair. This requires a previous openForNewGoal() to have
@@ -441,7 +444,7 @@ public class Session {
 	 * information as well as the authorization status.
 	 */
 	public void onActivityResult(int requestCode, int resultCode, Intent intent) {
-		if (LOCAL_LOGV) Log.v(TAG, "onActivityResult("+resultCode+")");
+		if (LOCAL_LOGV) Log.v(TAG, "onActivityResult(" + resultCode + ")");
 		switch (requestCode) {
 		case ACTIVITY_BEEMINDER_AUTH:
 			if (resultCode == Activity.RESULT_OK && intent != null) {
@@ -466,7 +469,7 @@ public class Session {
 					errorcode = extras.getInt(KEY_API_ERRORCODE, MSG_API_RESPONSE_ERROR);
 					errormsg = extras.getString(KEY_API_ERRORMSG);
 				}
-				
+
 				SessionError error;
 				switch (errorcode) {
 				case MSG_API_RESPONSE_BADVERSION:
@@ -476,9 +479,9 @@ public class Session {
 					error = new SessionError(ErrorType.ERROR_UNAUTHORIZED, errormsg);
 					break;
 				case MSG_API_RESPONSE_ERROR:
-				default:	
+				default:
 					error = new SessionError(ErrorType.ERROR_OPEN, errormsg);
-					break;	
+					break;
 				}
 
 				closeWithError(error);
@@ -487,6 +490,25 @@ public class Session {
 			break;
 		default:
 			break;
+		}
+	}
+
+	/**
+	 * This method can be used to ask the Beeminder app to display a particular
+	 * goal. The session object does not need to be open for this method to be
+	 * called, it can be called immediately after the session is created.
+	 */
+	public void visitGoal(String username, String goalslug) throws SessionException {
+		Intent intent = new Intent().setAction(ACTION_VISITGOAL).setPackage(BEEDROID_PACKAGE)
+				.addCategory(Intent.CATEGORY_DEFAULT).putExtra(KEY_VISITGOAL_USERNAME, username)
+				.putExtra(KEY_VISITGOAL_GOALSLUG, goalslug);
+		try {
+			if (mContext instanceof Activity) {
+				Activity act = (Activity) mContext;
+				act.startActivity(intent);
+			} else throw new SessionException("Provided context is not an Activity");
+		} catch (ActivityNotFoundException e) {
+			throw new SessionException("Could not initiate Beeminder goal detail activity");
 		}
 	}
 
